@@ -18,7 +18,7 @@ public class Task3EvenNumberFilter {
   }
 
   public void displayEvenNumbers() {
-    System.out.println("\nЗадача 3: Чётные числа");
+    System.out.println("\n#### Задача 3: Чётные числа");
     System.out.println("Массив: " + java.util.Arrays.toString(NUMBERS));
 
     List<Integer> evenNumbers = filterEvenNumbers();
