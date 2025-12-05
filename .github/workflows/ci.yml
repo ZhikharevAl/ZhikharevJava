@@ -2,29 +2,27 @@ name: CI Pipeline
 
 on:
   push:
+    branches: [ main, develop, 'feature/**' ]
   pull_request:
   workflow_dispatch:
 
 jobs:
   code-quality:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        java-version: [ '11' ]
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6.0.1
+        uses: actions/checkout@v4
 
-      - name: Set up JDK ${{ matrix.java-version }}
-        uses: actions/setup-java@v3
+      - name: Set up JDK 11
+        uses: actions/setup-java@v4
         with:
-          java-version: ${{ matrix.java-version }}
+          java-version: '11'
           distribution: 'temurin'
           cache: maven
 
-      - name: Run Google Java Format validation
-        run: mvn fmt:format --no-transfer-progress
+      - name: Run code format check
+        run: mvn fmt:check --no-transfer-progress
         continue-on-error: true
 
       - name: Run SpotBugs analysis
@@ -33,42 +31,66 @@ jobs:
   build:
     runs-on: ubuntu-latest
     needs: code-quality
-    strategy:
-      matrix:
-        java-version: [ '11' ]
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6.0.1
+        uses: actions/checkout@v4
 
-      - name: Set up JDK ${{ matrix.java-version }}
-        uses: actions/setup-java@v3
+      - name: Set up JDK 11
+        uses: actions/setup-java@v4
         with:
-          java-version: ${{ matrix.java-version }}
+          java-version: '11'
           distribution: 'temurin'
           cache: maven
 
-      - name: Compile project
+      - name: Clean and compile
         run: mvn clean compile --no-transfer-progress
 
-      - name: Run tests
+      - name: Run tests with Allure
         run: mvn test --no-transfer-progress
 
-      - name: Build project
-        run: mvn clean package -DskipTests --no-transfer-progress
+      - name: Generate Allure Report
+        if: always()
+        run: mvn allure:report --no-transfer-progress
+
+      - name: Upload Allure results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: allure-results
+          path: target/allure-results/
+          retention-days: 30
+
+      - name: Upload Allure report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: allure-report
+          path: target/allure-report/
+          retention-days: 30
 
       - name: Upload test results
         if: always()
-        uses: actions/upload-artifact@v5.0.0
+        uses: actions/upload-artifact@v4
         with:
-          name: test-results-java${{ matrix.java-version }}
+          name: surefire-reports
           path: target/surefire-reports/
           retention-days: 30
 
-      - name: Upload build artifacts
-        if: always()
+      - name: Build JAR
+        run: mvn package -DskipTests --no-transfer-progress
+
+      - name: Upload JAR artifact
         uses: actions/upload-artifact@v5.0.0
         with:
-          name: build-artifacts-java${{ matrix.java-version }}
+          name: java-basic-tasks-1.0.0.jar
           path: target/*.jar
           retention-days: 30
+
+      - name: Deploy Allure Report
+        if: github.ref == 'refs/heads/main' && always()
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: target/allure-report
+          destination_dir: allure-report
